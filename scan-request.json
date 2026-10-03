@@ -1,7 +1,7 @@
 {
   "query": "Sanaa, Sana'a, Sana’a, صنعاء",
   "platforms": "twitter,facebook",
-  "lookback_hours": 168,
+  "lookback_hours": 336,
   "config": {
     "twitter": {
       "accounts": ["AJEnglish", "AJArabic", "AlArabiya", "MiddleEastEye", "Reuters", "AFP", "AP", "XHNews"],

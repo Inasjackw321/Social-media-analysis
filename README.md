@@ -36,6 +36,8 @@ python -m http.server -d site   # then open http://localhost:8000
 | Instagram | Latest posts from `instagram.accounts` | `INSTAGRAM_SESSIONID`: searches each term as a hashtag |
 | Facebook | Public Page feeds from `facebook.pages`, read with a stealth browser | `FACEBOOK_COOKIES` (`c_user=…; xs=…`): full feeds and post search |
 
+**`SCRAPE_PROXY`** (optional, e.g. `http://user:pass@host:port`) sends all scraping through a proxy. X blocks GitHub's servers (HTTP 403), so a residential proxy is the other way to reach X without logging in.
+
 To get one of these values, log in to the site in your browser and open DevTools → Application → Cookies. Then add the value under **Settings → Secrets and variables → Actions**. **Use a spare account, not your main one**, because platforms can rate-limit or lock accounts that scrape.
 
 You can edit the accounts, pages and channels to watch in [`config.json`](config.json).

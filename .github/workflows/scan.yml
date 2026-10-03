@@ -72,6 +72,7 @@ jobs:
           X_CT0: ${{ secrets.X_CT0 }}
           INSTAGRAM_SESSIONID: ${{ secrets.INSTAGRAM_SESSIONID }}
           FACEBOOK_COOKIES: ${{ secrets.FACEBOOK_COOKIES }}
+          SCRAPE_PROXY: ${{ secrets.SCRAPE_PROXY }}
         run: |
           python -m social_topics scan \
             --query "$QUERY" --platforms "$PLATFORMS" --lookback-hours "$LOOKBACK" \

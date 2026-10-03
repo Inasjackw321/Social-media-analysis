@@ -26,6 +26,13 @@ BROWSER_TIMEOUT_MS = 60_000
 ADAPTIVE_DB = os.environ.get("SCRAPLING_ADAPTIVE_DB", ".scrapling/adaptive.db")
 
 
+def _proxy() -> dict:
+    """SCRAPE_PROXY (e.g. a residential proxy URL) routes all scraping through it.
+    X and others block datacenter IPs such as GitHub's runners."""
+    proxy = os.environ.get("SCRAPE_PROXY", "").strip()
+    return {"proxy": proxy} if proxy else {}
+
+
 class ScrapeError(RuntimeError):
     pass
 
@@ -35,7 +42,7 @@ def get(url: str, params: dict | None = None, headers: dict | None = None, cooki
 
     page = Fetcher.get(
         url, params=params, headers=headers, cookies=cookies,
-        impersonate="chrome", stealthy_headers=True, timeout=30, retries=2,
+        impersonate="chrome", stealthy_headers=True, timeout=30, retries=2, **_proxy(),
     )
     if page.status >= 400:
         raise ScrapeError(f"HTTP {page.status} from {url}")
@@ -75,7 +82,7 @@ def browser(cookies: list[dict] | None = None, capture_xhr: str | None = None) -
     try:
         with StealthySession(
             headless=True, network_idle=True, cookies=cookies, capture_xhr=capture_xhr,
-            timeout=BROWSER_TIMEOUT_MS, block_webrtc=True, block_ads=True, **extra,
+            timeout=BROWSER_TIMEOUT_MS, block_webrtc=True, block_ads=True, **extra, **_proxy(),
         ) as session:
             yield Browser(session)
     except ScrapeError:

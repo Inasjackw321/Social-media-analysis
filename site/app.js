@@ -90,6 +90,13 @@ function render(r) {
       ? [el("h2", {}, `Latest images (${r.gallery.length})`), el("div", { class: "gallery" }, r.gallery.map(galleryItem))]
       : [],
 
+    r.posts && r.posts.length
+      ? [el("h2", {}, `Matching posts (${r.posts.length})`),
+         el("details", { class: "topic" , ...(r.topics.length ? {} : { open: "" }) },
+           el("summary", {}, "Newest first"),
+           el("ul", { class: "samples" }, r.posts.map(postItem)))]
+      : [],
+
     el("h2", {}, "Topics"),
     r.topics.length
       ? r.topics.map((t, i) => topicCard(t, i, maxScore))
@@ -111,6 +118,15 @@ function galleryItem(g) {
     el("span", { class: "cap" },
       el("span", { class: `plat ${g.platform}` }, platName(g.platform)),
       ` · ${[g.author, when(g.created_at) || "date unknown"].filter(Boolean).join(" · ")}`));
+}
+
+function postItem(s) {
+  return el("li", {},
+    el("div", { class: "who" },
+      el("span", { class: `plat ${s.platform}` }, platName(s.platform)),
+      ` · ${[s.author || "unknown", when(s.created_at) || "date unknown", `${fmt(s.engagement)} engagement`].join(" · ")} · `,
+      el("a", { href: s.url, target: "_blank", rel: "noopener" }, "open")),
+    el("div", { class: "txt" }, s.text));
 }
 
 function stat(n, label) {

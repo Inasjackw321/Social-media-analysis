@@ -19,18 +19,28 @@ INDEX_LIMIT = 200
 GALLERY_LIMIT = 120
 
 
-def gallery(posts: list[Post]) -> list[dict]:
-    """Every post that has a picture, newest first (undated posts last)."""
-    with_images = [p for p in posts if p.images]
-    with_images.sort(key=lambda p: (bool(p.created_at), p.created_at, p.engagement), reverse=True)
-    return [{
+POSTS_LIMIT = 200
+
+
+def newest_first(posts: list[Post]) -> list[Post]:
+    return sorted(posts, key=lambda p: (bool(p.created_at), p.created_at, p.engagement), reverse=True)
+
+
+def _brief(p: Post, chars: int) -> dict:
+    return {
         "platform": p.platform,
         "url": p.url,
         "author": p.author,
         "created_at": p.created_at,
-        "text": " ".join(p.text.split())[:160],
+        "text": " ".join(p.text.split())[:chars],
         "images": p.images[:4],
-    } for p in with_images[:GALLERY_LIMIT]]
+        "engagement": p.engagement,
+    }
+
+
+def gallery(posts: list[Post]) -> list[dict]:
+    """Every post that has a picture, newest first (undated posts last)."""
+    return [_brief(p, 160) for p in newest_first([p for p in posts if p.images])[:GALLERY_LIMIT]]
 
 
 def build_report(
@@ -59,6 +69,7 @@ def build_report(
         "topics": [t.to_dict() for t in topics],
         "hashtags": top_hashtags(posts),
         "gallery": gallery(posts),
+        "posts": [_brief(p, 400) for p in newest_first(posts)[:POSTS_LIMIT]],
     }
 
 

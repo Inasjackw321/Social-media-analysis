@@ -24,6 +24,14 @@ class GalleryTests(unittest.TestCase):
         ]
         self.assertEqual([g["text"] for g in gallery(posts)], ["newer", "older", "no date"])
 
+    def test_report_lists_every_post(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "p.json"
+            src.write_text(json.dumps([Post("facebook", "1", "u", "Only match, no photo").to_dict()]))
+            main(["scan", "--from-file", str(src), "--out", d, "--report-id", "x"])
+            report = json.loads((Path(d) / "reports" / "x.json").read_text())
+        self.assertEqual([p["text"] for p in report["posts"]], ["Only match, no photo"])
+
 
 class CliReportTests(unittest.TestCase):
     def test_scan_from_file_writes_report_and_index(self):
