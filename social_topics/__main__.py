@@ -11,7 +11,7 @@ from pathlib import Path
 from .collectors import collect_all
 from .config import load_config
 from .models import Post, SourceResult
-from .report import build_report, load_latest, write_report
+from .report import build_report, load_latest, write_markdown, write_report
 from .topics import find_topics
 
 
@@ -24,6 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     scan.add_argument("--lookback-hours", type=int, default=None)
     scan.add_argument("--config", default=None, help="Path to config.json")
     scan.add_argument("--out", default="site/data", help="Site data directory")
+    scan.add_argument("--results", default="results", help="Folder for the Markdown reports GitHub displays")
     scan.add_argument("--report-id", default="", help="Report file name (default: timestamp)")
     scan.add_argument("--request", default="", help="JSON file with query/platforms/lookback_hours/config overrides")
     scan.add_argument("--from-file", default="", help="Analyse posts from a JSON file instead of calling APIs")
@@ -52,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     report_id = args.report_id or datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     report = build_report(report_id, cfg, posts, sources, topics, load_latest(data_dir))
     path = write_report(data_dir, report)
+    write_markdown(Path(args.results), report, data_dir)
 
     print(f"\n{len(posts)} posts -> {len(topics)} topics. Report: {path}")
     for i, t in enumerate(topics, 1):

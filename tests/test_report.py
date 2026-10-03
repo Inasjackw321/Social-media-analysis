@@ -28,7 +28,7 @@ class GalleryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             src = Path(d) / "p.json"
             src.write_text(json.dumps([Post("facebook", "1", "u", "Only match, no photo").to_dict()]))
-            main(["scan", "--from-file", str(src), "--out", d, "--report-id", "x"])
+            main(["scan", "--results", str(Path(d) / "md"), "--from-file", str(src), "--out", d, "--report-id", "x"])
             report = json.loads((Path(d) / "reports" / "x.json").read_text())
         self.assertEqual([p["text"] for p in report["posts"]], ["Only match, no photo"])
 
@@ -40,14 +40,14 @@ class CliReportTests(unittest.TestCase):
             src.write_text(json.dumps([p.to_dict() for p in POSTS]))
             out = Path(d) / "data"
 
-            self.assertEqual(main(["scan", "--from-file", str(src), "--out", str(out), "--report-id", "r1"]), 0)
+            self.assertEqual(main(["scan", "--results", str(Path(d) / "md"), "--from-file", str(src), "--out", str(out), "--report-id", "r1"]), 0)
             report = json.loads((out / "reports" / "r1.json").read_text())
             self.assertEqual(report["totals"]["posts"], 3)
             self.assertEqual(report["topics"][0]["label"], "interest rates")
             self.assertFalse(report["topics"][0]["new"])  # nothing to compare with yet
             self.assertEqual(report["hashtags"], [{"tag": "#economy", "count": 2}])
 
-            main(["scan", "--from-file", str(src), "--out", str(out), "--report-id", "r2"])
+            main(["scan", "--results", str(Path(d) / "md"), "--from-file", str(src), "--out", str(out), "--report-id", "r2"])
             index = json.loads((out / "index.json").read_text())
             self.assertEqual([r["id"] for r in index["reports"]], ["r2", "r1"])
             self.assertEqual(index["reports"][0]["top_topics"][0], "interest rates")
@@ -62,8 +62,8 @@ class CliReportTests(unittest.TestCase):
                 Post("instagram", "5", "u", "Solar eclipse photos", "@c"),
             ]
             second.write_text(json.dumps([p.to_dict() for p in extra]))
-            main(["scan", "--from-file", str(first), "--out", str(out), "--report-id", "a"])
-            main(["scan", "--from-file", str(second), "--out", str(out), "--report-id", "b"])
+            main(["scan", "--results", str(Path(d) / "md"), "--from-file", str(first), "--out", str(out), "--report-id", "a"])
+            main(["scan", "--results", str(Path(d) / "md"), "--from-file", str(second), "--out", str(out), "--report-id", "b"])
             topics = {t["label"]: t["new"] for t in json.loads((out / "reports" / "b.json").read_text())["topics"]}
             self.assertTrue(topics["solar eclipse"])
             self.assertFalse(topics["interest rates"])
@@ -75,9 +75,26 @@ class CliReportTests(unittest.TestCase):
         self.assertIn("scrolls", cfg.twitter)  # other keys from config.json kept
         self.assertEqual(cfg.lookback_hours, 168)
 
+    def test_markdown_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "p.json"
+            src.write_text(json.dumps([
+                Post("twitter", "1", "https://x.com/a/status/1", "Old Sanaa | souk <b>", "@aj",
+                     created_at="2026-10-02T08:00:00Z", images=["https://pbs.twimg.com/media/A.jpg"]).to_dict(),
+                Post("facebook", "2", "https://fb.com/2", "No photo here", "Page").to_dict(),
+            ]))
+            main(["scan", "--results", str(Path(d) / "md"), "--from-file", str(src), "--out", d, "--report-id", "m1"])
+            md = (Path(d) / "md" / "latest.md").read_text()
+            index = (Path(d) / "md" / "README.md").read_text()
+        self.assertIn('<img src="https://pbs.twimg.com/media/A.jpg"', md)
+        self.assertIn("Old Sanaa \\| souk &lt;b&gt;", md)  # scraped text can't break the table/HTML
+        self.assertIn("@\u200baj", md)  # no GitHub @mention
+        self.assertIn("Matching posts, newest first (2)", md)
+        self.assertIn("[m1](m1.md)", index)
+
     def test_fails_when_no_platform_returns_data(self):
         with tempfile.TemporaryDirectory() as d:
-            code = main(["scan", "--platforms", "twitter", "--out", d, "--config", "/nonexistent.json"])
+            code = main(["scan", "--results", str(Path(d) / "md"), "--platforms", "twitter", "--out", d, "--config", "/nonexistent.json"])
         self.assertEqual(code, 1)
 
 
