@@ -1,10 +1,11 @@
 """X / Twitter, scraped with Scrapling.
 
-- Accounts in config.json (no login): X's public embed timeline
-  (syndication.twitter.com), which ships the tweets as JSON inside the page.
+- Accounts in config.json: first X's public embed timeline
+  (syndication.twitter.com, fast HTTP). If that's empty or blocked, a stealth
+  browser opens x.com/<account> and captures the timeline JSON the page loads
+  in the background (Scrapling's capture_xhr).
 - Search terms: X only allows search when logged in, so this needs the
   X_AUTH_TOKEN secret (the `auth_token` cookie from a logged-in browser).
-  A stealth browser then loads x.com/search and reads the tweets off the page.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ from ..models import Post
 from .base import NotConfigured, finish, is_recent, iso, matches_query
 
 SYNDICATION = "https://syndication.twitter.com/srv/timeline-profile/screen-name/{user}"
+GRAPHQL = r"/graphql/[^/]+/(UserTweets|UserMedia|SearchTimeline|TweetDetail)"
+TWEET = 'article[data-testid="tweet"]'
 
 
 def collect(cfg: ScanConfig) -> list[Post]:
@@ -29,19 +32,44 @@ def collect(cfg: ScanConfig) -> list[Post]:
 
     posts: list[Post] = []
     errors: list[str] = []
-    if cfg.query and auth:
-        try:
-            posts += search(cfg.query, auth, cfg.secret("X_CT0"), cfg.lookback_hours, int(cfg.twitter.get("scrolls", 5)))
-        except scrape.ScrapeError as e:
-            errors.append(f"search: {e}")
+    needs_browser: list[str] = []
+    read = 0
     for user in accounts:
         try:
             page = scrape.get(SYNDICATION.format(user=urllib.parse.quote(user)))
-            posts += [p for p in parse_syndication(page.body.decode("utf-8", "replace")) if matches_query(p.text, cfg.query)]
-        except scrape.ScrapeError as e:
-            errors.append(f"@{user}: {e}")
+            found = parse_syndication(page.body.decode("utf-8", "replace"))
+        except scrape.ScrapeError:
+            found = []
+        read += len(found)
+        if found:
+            posts += [p for p in found if matches_query(p.text, cfg.query)]
+        else:
+            needs_browser.append(user)
 
-    return finish([p for p in posts if is_recent(p.created_at, cfg)], errors)
+    scrolls = int(cfg.twitter.get("scrolls", 5))
+    targets = [(f"https://x.com/{urllib.parse.quote(u)}", f"@{u}", True) for u in needs_browser]
+    if cfg.query and auth:
+        q = urllib.parse.urlencode({"q": build_query(cfg.query, cfg.lookback_hours), "f": "live"})
+        targets.append((f"https://x.com/search?{q}", "search", False))
+    if targets:
+        cookies = {"auth_token": auth, **({"ct0": cfg.secret("X_CT0")} if cfg.secret("X_CT0") else {})} if auth else None
+        try:
+            with scrape.browser(scrape.browser_cookies(cookies, ".x.com") if cookies else None, capture_xhr=GRAPHQL) as b:
+                for url, label, filter_by_query in targets:
+                    try:
+                        page = b.fetch(url, page_action=scrape.scroll(scrolls))
+                    except scrape.ScrapeError as e:
+                        errors.append(f"{label}: {e}")
+                        continue
+                    found = parse_graphql(scrape.xhr_json(page)) or parse_search_page(page)
+                    if not found:
+                        errors.append(f"{label}: no tweets visible (X may require login)")
+                    read += len(found)
+                    posts += [p for p in found if not filter_by_query or matches_query(p.text, cfg.query)]
+        except scrape.ScrapeError as e:
+            errors.append(str(e))
+
+    return finish([p for p in posts if is_recent(p.created_at, cfg)], errors, read, cfg)
 
 
 def build_query(terms: list[str], lookback_hours: int) -> str:
@@ -50,30 +78,15 @@ def build_query(terms: list[str], lookback_hours: int) -> str:
     return f"({' OR '.join(parts)}) -filter:retweets since_time:{int(since)}"
 
 
-def search(terms: list[str], auth_token: str, ct0: str, lookback_hours: int, scrolls: int) -> list[Post]:
-    cookies = {"auth_token": auth_token, **({"ct0": ct0} if ct0 else {})}
-    url = "https://x.com/search?" + urllib.parse.urlencode({"q": build_query(terms, lookback_hours), "f": "top"})
-    page = scrape.browse(
-        url,
-        cookies=scrape.browser_cookies(cookies, ".x.com"),
-        page_action=scrape.scroll(scrolls),
-        wait_selector='article[data-testid="tweet"]',
-    )
-    posts = parse_search_page(page)
-    if not posts:
-        raise scrape.ScrapeError("x.com search showed no tweets (is X_AUTH_TOKEN still valid?)")
-    return posts
-
-
 def parse_search_page(page) -> list[Post]:
     posts = []
-    for art in page.css('article[data-testid="tweet"]'):
+    for art in scrape.select(page, TWEET, "x-tweet"):
         time_el = art.css("time").first
         link = time_el.parent.attrib.get("href", "") if time_el is not None else ""
         m = re.match(r"/([^/]+)/status/(\d+)", link)
         if not m:
             continue
-        text_el = art.css('div[data-testid="tweetText"]').first
+        text_el = scrape.select(art, 'div[data-testid="tweetText"]', "x-tweet-text").first
         group = art.css('div[role="group"]').first
         stats = group.attrib.get("aria-label", "") if group is not None else ""
         posts.append(Post(
@@ -90,6 +103,36 @@ def parse_search_page(page) -> list[Post]:
             images=[i.attrib["src"] for i in art.css('div[data-testid="tweetPhoto"] img') if i.attrib.get("src")],
         ))
     return posts
+
+
+def parse_graphql(docs: list) -> list[Post]:
+    """Tweets from X's own GraphQL responses (timeline, search, tweet detail)."""
+    posts = {}
+    for doc in docs:
+        for res in scrape.walk(doc, "tweet_results"):
+            r = res.get("result") if isinstance(res, dict) else None
+            if r and r.get("__typename") == "TweetWithVisibilityResults":
+                r = r.get("tweet")
+            legacy = (r or {}).get("legacy") or {}
+            if "id_str" not in legacy:
+                continue
+            user = scrape.first(scrape.walk(r.get("core", {}), "screen_name"), "")
+            note = scrape.first(scrape.walk(r.get("note_tweet", {}), "text"), "")
+            media = legacy.get("extended_entities", {}).get("media") or legacy.get("entities", {}).get("media", [])
+            posts[legacy["id_str"]] = Post(
+                platform="twitter",
+                id=legacy["id_str"],
+                url=f"https://x.com/{user or 'i'}/status/{legacy['id_str']}",
+                text=note or legacy.get("full_text", ""),
+                author=f"@{user}" if user else "",
+                created_at=_twitter_time(legacy.get("created_at", "")),
+                likes=legacy.get("favorite_count", 0) or 0,
+                comments=legacy.get("reply_count", 0) or 0,
+                shares=(legacy.get("retweet_count", 0) or 0) + (legacy.get("quote_count", 0) or 0),
+                views=int((r.get("views") or {}).get("count", 0) or 0),
+                images=[m["media_url_https"] for m in media if m.get("media_url_https")],
+            )
+    return list(posts.values())
 
 
 def _metric(label: str, word: str) -> int:

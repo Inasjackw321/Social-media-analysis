@@ -4,7 +4,12 @@ Finds what people are talking about on **YouTube, X/Twitter, Facebook and Instag
 
 **https://inasjackw321.github.io/Social-media-analysis/**
 
-The posts are scraped with [Scrapling](https://github.com/D4Vinci/Scrapling). The app then groups the posts into topics: keyphrases and hashtags that several different accounts use, ranked by engagement and by how many platforms mention them. Each scan is saved to `site/data/`, so the site keeps a history you can switch between. Topics that weren't in the previous scan are marked **new**.
+The posts are scraped with [Scrapling](https://github.com/D4Vinci/Scrapling):
+- **Fetcher** (HTTP with a real Chrome TLS fingerprint) handles YouTube, Instagram and X's embed timelines.
+- **StealthySession** keeps one stealth Chromium open for all the Facebook/X pages in a scan. Its `capture_xhr` option collects the JSON those sites' own scripts load in the background, so posts come with exact dates, photos and counts instead of being read off the HTML.
+- **Adaptive selectors** handle the HTML fallback. Elements are fingerprinted into `.scrapling/adaptive.db` (cached between Actions runs), so when a site renames its markup, Scrapling relocates them by similarity.
+
+The app then groups the posts into topics: keyphrases and hashtags that several different accounts use, ranked by engagement and by how many platforms mention them. Each scan is saved to `site/data/`, so the site keeps a history you can switch between. Topics that weren't in the previous scan are marked **new**.
 
 ## Running a scan
 
@@ -27,7 +32,7 @@ python -m http.server -d site   # then open http://localhost:8000
 | Platform | No login needed | Optional secret, which also enables keyword search |
 |---|---|---|
 | YouTube | Search results for your terms, plus the RSS feeds of the channels in `config.json` | — |
-| X / Twitter | Recent posts from `twitter.accounts`, via X's public embed timeline | `X_AUTH_TOKEN` (plus `X_CT0` if needed): a stealth browser searches x.com |
+| X / Twitter | Recent posts from `twitter.accounts`, via X's public embed timeline, or the profile page's own timeline JSON if that's rate-limited | `X_AUTH_TOKEN` (plus `X_CT0` if needed): a stealth browser searches x.com |
 | Instagram | Latest posts from `instagram.accounts` | `INSTAGRAM_SESSIONID`: searches each term as a hashtag |
 | Facebook | Public Page feeds from `facebook.pages`, read with a stealth browser | `FACEBOOK_COOKIES` (`c_user=…; xs=…`): full feeds and post search |
 
@@ -35,7 +40,7 @@ To get one of these values, log in to the site in your browser and open DevTools
 
 You can edit the accounts, pages and channels to watch in [`config.json`](config.json).
 
-**Known limits.** The platforms change their pages often and limit logged-out visitors, so expect some failures. If a platform fails or is skipped, the report still covers the other platforms, and it says what went wrong with each one. Facebook doesn't show post dates to scrapers, so the lookback window can't filter Facebook posts. Scraping may go against a platform's terms of service, so use this for personal research.
+**Known limits.** The platforms change their pages often and limit logged-out visitors, so expect some failures. If a platform fails or is skipped, the report still covers the other platforms, and it says what went wrong with each one. Scraping may go against a platform's terms of service, so use this for personal research.
 
 ## One-time setup
 

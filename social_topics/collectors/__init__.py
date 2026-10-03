@@ -28,5 +28,5 @@ def collect_all(cfg: ScanConfig, collectors: dict | None = None) -> tuple[list[P
         else:
             posts += found
             warnings = "; ".join(getattr(found, "warnings", []))
-            results[name] = SourceResult("ok", f"Partly failed: {warnings}"[:500] if warnings else "", len(found))
+            results[name] = SourceResult("ok", warnings[:500], len(found))
     return posts, results

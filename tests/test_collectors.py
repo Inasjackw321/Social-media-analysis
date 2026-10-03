@@ -23,6 +23,38 @@ def cfg(env=None, query=None, platforms=None, **sections):
     return c
 
 
+class FakeBrowser:
+    """Stands in for scrape.browser(): records calls and serves canned pages."""
+
+    def __init__(self, pages):
+        self.pages = pages  # url substring -> page (or exception)
+        self.urls, self.cookies, self.capture_xhr = [], None, None
+
+    def __call__(self, cookies=None, capture_xhr=None):
+        self.cookies, self.capture_xhr = cookies, capture_xhr
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def fetch(self, url, page_action=None, wait_selector=None):
+        self.urls.append(url)
+        result = next((v for k, v in self.pages.items() if k in url), Selector("<html></html>"))
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+
+def with_xhr(html, *docs):
+    """A parsed page plus captured background JSON, like a Scrapling browser response."""
+    sel = Selector(html)
+    sel.captured_xhr = [SimpleNamespace(body=json.dumps(d).encode()) for d in docs]
+    return sel
+
+
 def page(body: str | bytes):
     """Something shaped like a Scrapling response for the code under test."""
     raw = body.encode() if isinstance(body, str) else body
@@ -44,6 +76,19 @@ class HelperTests(unittest.TestCase):
     def test_extract_json_after(self):
         html = '<script>var ytInitialData = {"a": {"b": "};"}};</script>'
         self.assertEqual(scrape.extract_json_after(html, "var ytInitialData = "), {"a": {"b": "};"}})
+
+    def test_json_documents(self):
+        self.assertEqual(scrape.json_documents('{"a":1}\n{"b":2}'), [{"a": 1}, {"b": 2}])
+        self.assertEqual(scrape.json_documents("not json"), [])
+
+    def test_select_is_adaptive_when_page_supports_it(self):
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as d:
+            conf = {"adaptive": True, "storage_args": {"storage_file": os.path.join(d, "a.db"), "url": "https://fb.com/x"}}
+            old = Selector('<div role="feed"><div role="article"><div data-ad-preview="message" dir="auto">Hi</div></div></div>', **conf)
+            self.assertEqual(len(scrape.select(old, 'div[data-ad-preview="message"]', "msg")), 1)
+            new = Selector('<div role="feed"><div role="article"><div data-ad-comet-preview="message" dir="auto">Hi</div></div></div>', **conf)
+            self.assertEqual([e.text for e in scrape.select(new, 'div[data-ad-preview="message"]', "msg")], ["Hi"])
 
     def test_cookie_header(self):
         self.assertEqual(scrape.cookie_header_to_dict("c_user=1; xs=abc=="), {"c_user": "1", "xs": "abc=="})
@@ -142,10 +187,32 @@ class TwitterTests(unittest.TestCase):
         self.assertEqual(p.images, ["https://pbs.twimg.com/media/B.jpg"])
 
     def test_search_uses_login_cookie(self):
-        with mock.patch.object(scrape, "browse", return_value=Selector(X_SEARCH)) as browse:
+        fake = FakeBrowser({"x.com/search": Selector(X_SEARCH)})
+        with mock.patch.object(scrape, "browser", fake):
             twitter.collect(cfg(env={"X_AUTH_TOKEN": "tok"}, query="storm", twitter={}))
-        self.assertEqual(browse.call_args.kwargs["cookies"][0]["name"], "auth_token")
-        self.assertIn("x.com/search", browse.call_args.args[0])
+        self.assertEqual(fake.cookies[0]["name"], "auth_token")
+        self.assertIn("f=live", fake.urls[0])  # newest first
+        self.assertIn("SearchTimeline", fake.capture_xhr)
+
+    def test_graphql_capture_when_embed_is_empty(self):
+        gql = {"data": {"user": {"result": {"timeline": {"instructions": [{"entries": [{"content": {"itemContent": {
+            "tweet_results": {"result": {
+                "__typename": "Tweet",
+                "core": {"user_results": {"result": {"legacy": {"screen_name": "AJEnglish"}}}},
+                "views": {"count": "9000"},
+                "legacy": {"id_str": "333", "full_text": "Scenes from Sanaa today",
+                           "created_at": NOW.strftime("%a %b %d %H:%M:%S +0000 %Y"),
+                           "favorite_count": 7, "retweet_count": 2, "quote_count": 0, "reply_count": 1,
+                           "extended_entities": {"media": [{"media_url_https": "https://pbs.twimg.com/media/S.jpg"}]}},
+            }}}}}]}]}}}}}
+        fake = FakeBrowser({"x.com/AJEnglish": with_xhr("<html></html>", gql)})
+        with mock.patch.object(scrape, "get", side_effect=scrape.ScrapeError("HTTP 429")), \
+             mock.patch.object(scrape, "browser", fake):
+            posts = twitter.collect(cfg(query="sanaa", twitter={"accounts": ["AJEnglish"]}))
+        self.assertEqual(fake.urls, ["https://x.com/AJEnglish"])
+        p = posts[0]
+        self.assertEqual((p.url, p.views, p.images), ("https://x.com/AJEnglish/status/333", 9000,
+                                                       ["https://pbs.twimg.com/media/S.jpg"]))
 
     def test_search_without_login_is_skipped(self):
         with self.assertRaises(NotConfigured):
@@ -202,13 +269,46 @@ class FacebookTests(unittest.TestCase):
         self.assertNotIn("https://scontent.xx.fbcdn.net/avatar.jpg", p.images)
 
     def test_cookies_enable_search(self):
-        with mock.patch.object(scrape, "browse", return_value=Selector(FB_PAGE)) as browse:
+        fake = FakeBrowser({"search/posts": Selector(FB_PAGE)})
+        with mock.patch.object(scrape, "browser", fake):
             facebook.collect(cfg(env={"FACEBOOK_COOKIES": "c_user=1; xs=2"}, query="floods", facebook={}))
-        self.assertIn("search/posts?q=floods", browse.call_args.args[0])
-        self.assertEqual({c["name"] for c in browse.call_args.kwargs["cookies"]}, {"c_user", "xs"})
+        self.assertIn("search/posts?q=floods", fake.urls[0])
+        self.assertEqual({c["name"] for c in fake.cookies}, {"c_user", "xs"})
+
+    def test_json_stories_preferred(self):
+        story = {"__typename": "Story", "post_id": "77", "comet_sections": {
+            "content": {"story": {"message": {"text": "Photos: life in Sanaa"}}},
+            "context_layout": {"story": {"comet_sections": {"metadata": [{"story": {"creation_time": int(NOW.timestamp()) - 600}}]}}},
+        }, "url": "https://www.facebook.com/aljazeera/posts/pfbid077",
+            "actors": [{"name": "Al Jazeera"}],
+            "attachments": [{"styles": {"attachment": {"media": {"photo_image": {"uri": "https://scontent.xx.fbcdn.net/s.jpg"}}}}}],
+            "feedback": {"reaction_count": {"count": 321}, "share_count": {"count": 12}}}
+        embedded = f'<html><script type="application/json">{json.dumps({"require": [story]})}</script></html>'
+        fake = FakeBrowser({"aljazeera": with_xhr(embedded)})
+        with mock.patch.object(scrape, "browser", fake):
+            posts = facebook.collect(cfg(query="sanaa", facebook={"pages": ["aljazeera"]}))
+        self.assertEqual(fake.capture_xhr, facebook.GRAPHQL)
+        p = posts[0]
+        self.assertEqual((p.author, p.likes, p.shares), ("Al Jazeera", 321, 12))
+        self.assertTrue(p.created_at)  # dated, unlike HTML-only parsing
+        self.assertEqual(p.images, ["https://scontent.xx.fbcdn.net/s.jpg"])
+
+    def test_explains_when_nothing_matched(self):
+        fake = FakeBrowser({"bbcnews": Selector(FB_PAGE)})
+        with mock.patch.object(scrape, "browser", fake):
+            posts = facebook.collect(cfg(query="sanaa", facebook={"pages": ["bbcnews"]}))
+        self.assertEqual(list(posts), [])
+        self.assertIn("read 1 posts, none from the last 24h mentioning sanaa", posts.warnings[0])
+
+    def test_old_json_stories_are_dropped(self):
+        story = {"__typename": "Story", "post_id": "1", "comet_sections": {}, "creation_time": 1_000_000_000,
+                 "message": {"text": "Sanaa in 2001"}}
+        fake = FakeBrowser({"aljazeera": with_xhr("<html></html>", {"data": story})})
+        with mock.patch.object(scrape, "browser", fake):
+            self.assertEqual(facebook.collect(cfg(facebook={"pages": ["aljazeera"]})), [])
 
     def test_login_wall_reported(self):
-        with mock.patch.object(scrape, "browse", return_value=Selector("<html>Log in</html>")):
+        with mock.patch.object(scrape, "browser", FakeBrowser({"bbcnews": Selector("<html>Log in</html>")})):
             with self.assertRaisesRegex(scrape.ScrapeError, "login wall"):
                 facebook.collect(cfg(facebook={"pages": ["bbcnews"]}))
 

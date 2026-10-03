@@ -58,9 +58,18 @@ class Found(list):
         self.warnings = list(warnings)
 
 
-def finish(posts: list, errors: list[str]) -> Found:
-    """Fail only if nothing worked; otherwise keep the posts and pass errors on as warnings."""
+def finish(posts: list, errors: list[str], read: int | None = None, cfg: ScanConfig | None = None) -> Found:
+    """Fail only if nothing worked; otherwise keep the posts and pass errors on as warnings.
+
+    `read` is how many posts were seen before filtering, so an empty result can
+    say "read 80 posts, none matched" instead of looking like a silent failure.
+    """
     if errors and not posts:
         raise ScrapeError("; ".join(errors))
     unique = {(p.platform, p.id): p for p in posts}
-    return Found(unique.values(), errors)
+    notes = list(errors)
+    if not unique and read:
+        terms = f" mentioning {', '.join(cfg.query)}" if cfg and cfg.query else ""
+        hours = f" from the last {cfg.lookback_hours}h" if cfg else ""
+        notes.append(f"read {read} posts, none{hours}{terms}")
+    return Found(unique.values(), notes)

@@ -3,8 +3,13 @@
 - get()/get_json(): Scrapling's Fetcher — fast HTTP that impersonates a real
   Chrome TLS fingerprint and headers. Used for YouTube, Instagram and X's
   embed endpoints.
-- browse(): Scrapling's StealthyFetcher — a stealth headless Chromium for pages
-  that only render with JavaScript (Facebook, logged-in X search).
+- browser(): a Scrapling StealthySession — one stealth headless Chromium kept
+  open across several pages (Facebook, X). It can also capture the JSON the
+  page's own scripts fetch in the background (capture_xhr), which is sturdier
+  than reading the rendered HTML.
+- select(): CSS selection with Scrapling's adaptive mode. Elements found today
+  are fingerprinted into a small SQLite file; if a site renames its markup
+  later, Scrapling relocates them by similarity instead of finding nothing.
 """
 
 from __future__ import annotations
@@ -12,10 +17,13 @@ from __future__ import annotations
 import json
 import os
 import re
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Callable
+from pathlib import Path
+from typing import Callable, Iterator
 
 BROWSER_TIMEOUT_MS = 60_000
+ADAPTIVE_DB = os.environ.get("SCRAPLING_ADAPTIVE_DB", ".scrapling/adaptive.db")
 
 
 class ScrapeError(RuntimeError):
@@ -42,22 +50,86 @@ def get_json(url: str, params: dict | None = None, headers: dict | None = None, 
         raise ScrapeError(f"{url} did not return JSON (probably a login wall or rate limit)") from None
 
 
-def browse(
-    url: str,
-    cookies: list[dict] | None = None,
-    page_action: Callable | None = None,
-    wait_selector: str | None = None,
-):
-    from scrapling.fetchers import StealthyFetcher
+class Browser:
+    """One open stealth browser. fetch() pages through it; each page keeps its captured XHR."""
+
+    def __init__(self, session):
+        self.session = session
+
+    def fetch(self, url: str, page_action: Callable | None = None, wait_selector: str | None = None):
+        Path(ADAPTIVE_DB).parent.mkdir(parents=True, exist_ok=True)
+        page = self.session.fetch(
+            url, page_action=page_action, wait_selector=wait_selector,
+            selector_config={"adaptive": True, "storage_args": {"storage_file": ADAPTIVE_DB, "url": url}},
+        )
+        if page.status >= 400:
+            raise ScrapeError(f"HTTP {page.status} from {url}")
+        return page
+
+
+@contextmanager
+def browser(cookies: list[dict] | None = None, capture_xhr: str | None = None) -> Iterator[Browser]:
+    from scrapling.fetchers import StealthySession
 
     extra = {"executable_path": os.environ["CHROMIUM_PATH"]} if os.environ.get("CHROMIUM_PATH") else {}
-    page = StealthyFetcher.fetch(
-        url, headless=True, network_idle=True, cookies=cookies, page_action=page_action,
-        wait_selector=wait_selector, timeout=BROWSER_TIMEOUT_MS, block_webrtc=True, **extra,
-    )
-    if page.status >= 400:
-        raise ScrapeError(f"HTTP {page.status} from {url}")
-    return page
+    try:
+        with StealthySession(
+            headless=True, network_idle=True, cookies=cookies, capture_xhr=capture_xhr,
+            timeout=BROWSER_TIMEOUT_MS, block_webrtc=True, block_ads=True, **extra,
+        ) as session:
+            yield Browser(session)
+    except ScrapeError:
+        raise
+    except Exception as e:  # browser failed to start or crashed
+        raise ScrapeError(f"browser error: {type(e).__name__}: {e}") from e
+
+
+def xhr_json(page) -> list:
+    """Parse every captured background response; Facebook sends several JSON documents per response."""
+    docs = []
+    for resp in getattr(page, "captured_xhr", None) or []:
+        try:
+            body = resp.body if isinstance(resp.body, (bytes, str)) else resp.body()
+        except Exception:  # noqa: BLE001 - a response we can't read is just skipped
+            continue
+        text = body.decode("utf-8", "replace") if isinstance(body, bytes) else body
+        docs += json_documents(text.removeprefix("for (;;);"))
+    return docs
+
+
+def json_documents(text: str) -> list:
+    """Decode one JSON document, or several separated by newlines."""
+    try:
+        return [json.loads(text)]
+    except ValueError:
+        pass
+    out = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith(("{", "[")):
+            try:
+                out.append(json.loads(line))
+            except ValueError:
+                continue
+    return out
+
+
+def embedded_json(page) -> list:
+    """JSON blobs inside <script type="application/json"> tags (how Facebook ships its first posts)."""
+    docs = []
+    for script in page.css('script[type="application/json"]'):
+        docs += json_documents(str(script.text or ""))
+    return docs
+
+
+def select(node, selector: str, key: str):
+    """node.css(selector), but adaptive when the page supports it (see module docstring)."""
+    if not getattr(node, "_Selector__adaptive_enabled", False):
+        return node.css(selector)
+    found = node.css(selector, identifier=key, auto_save=True)
+    if not found:
+        found = node.css(selector, identifier=key, adaptive=True)
+    return found
 
 
 def scroll(times: int = 4, pause_ms: int = 1500) -> Callable:
@@ -139,3 +211,18 @@ def walk(obj, key: str):
     elif isinstance(obj, list):
         for v in obj:
             yield from walk(v, key)
+
+
+def iter_dicts(obj):
+    """Every dict nested anywhere inside obj."""
+    if isinstance(obj, dict):
+        yield obj
+        for v in obj.values():
+            yield from iter_dicts(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            yield from iter_dicts(v)
+
+
+def first(values, default=None):
+    return next(iter(values), default)

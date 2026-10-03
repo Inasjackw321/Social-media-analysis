@@ -53,6 +53,14 @@ jobs:
         if: github.event_name != 'push'
         run: scrapling install
 
+      - name: Restore Scrapling's adaptive-selector memory
+        if: github.event_name != 'push'
+        uses: actions/cache@v4
+        with:
+          path: .scrapling
+          key: scrapling-adaptive-${{ github.run_id }}
+          restore-keys: scrapling-adaptive-
+
       - name: Scan
         if: github.event_name != 'push'
         env:
