@@ -16,6 +16,21 @@ from .models import Post, SourceResult
 from .topics import Topic, top_hashtags
 
 INDEX_LIMIT = 200
+GALLERY_LIMIT = 120
+
+
+def gallery(posts: list[Post]) -> list[dict]:
+    """Every post that has a picture, newest first (undated posts last)."""
+    with_images = [p for p in posts if p.images]
+    with_images.sort(key=lambda p: (bool(p.created_at), p.created_at, p.engagement), reverse=True)
+    return [{
+        "platform": p.platform,
+        "url": p.url,
+        "author": p.author,
+        "created_at": p.created_at,
+        "text": " ".join(p.text.split())[:160],
+        "images": p.images[:4],
+    } for p in with_images[:GALLERY_LIMIT]]
 
 
 def build_report(
@@ -43,6 +58,7 @@ def build_report(
         },
         "topics": [t.to_dict() for t in topics],
         "hashtags": top_hashtags(posts),
+        "gallery": gallery(posts),
     }
 
 

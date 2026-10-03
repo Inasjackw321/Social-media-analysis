@@ -86,6 +86,10 @@ function render(r) {
           el("span", { class: "dot" }),
           `${platName(name)}: ${s.status === "ok" ? `${s.count} posts` : s.status}`))),
 
+    r.gallery && r.gallery.length
+      ? [el("h2", {}, `Latest images (${r.gallery.length})`), el("div", { class: "gallery" }, r.gallery.map(galleryItem))]
+      : [],
+
     el("h2", {}, "Topics"),
     r.topics.length
       ? r.topics.map((t, i) => topicCard(t, i, maxScore))
@@ -98,6 +102,15 @@ function render(r) {
 
     skippedNotes(r.sources),
   ].flat(2));
+}
+
+function galleryItem(g) {
+  const src = g.images.find((u) => /^https:\/\//i.test(u));
+  return el("a", { class: "shot", href: g.url, target: "_blank", rel: "noopener", title: g.text },
+    src ? el("img", { src, alt: g.text || `${platName(g.platform)} image`, loading: "lazy", referrerpolicy: "no-referrer" }) : null,
+    el("span", { class: "cap" },
+      el("span", { class: `plat ${g.platform}` }, platName(g.platform)),
+      ` · ${[g.author, when(g.created_at) || "date unknown"].filter(Boolean).join(" · ")}`));
 }
 
 function stat(n, label) {

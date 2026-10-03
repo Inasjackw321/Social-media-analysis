@@ -42,9 +42,12 @@ def load_config(
     platforms: str | list | None = None,
     lookback_hours: int | None = None,
     env: dict | None = None,
+    overrides: dict | None = None,
 ) -> ScanConfig:
     path = Path(path) if path else DEFAULT_CONFIG_PATH
     raw = json.loads(path.read_text()) if path.exists() else {}
+    for key, value in (overrides or {}).items():
+        raw[key] = {**raw.get(key, {}), **value} if isinstance(value, dict) else value
 
     chosen = parse_list(platforms) or parse_list(raw.get("platforms")) or list(ALL_PLATFORMS)
     unknown = [p for p in chosen if p not in ALL_PLATFORMS]

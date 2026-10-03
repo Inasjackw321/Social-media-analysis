@@ -85,8 +85,18 @@ def parse_page(page, default_author: str = "") -> list[Post]:
             likes=_metric(everything, r"All reactions:\s*([\d.,]+[KMB]?)"),
             comments=_metric(everything, r"([\d.,]+[KMB]?)\s+comments?"),
             shares=_metric(everything, r"([\d.,]+[KMB]?)\s+shares?"),
+            images=_images(art),
         ))
     return posts
+
+
+def _images(art) -> list[str]:
+    out = []
+    for img in art.css("img[src]"):
+        src = img.attrib["src"]
+        if ("scontent" in src or "fbcdn" in src) and img.find_ancestor(lambda a: a.tag in ("h2", "h3", "strong")) is None:
+            out.append(src)
+    return list(dict.fromkeys(out))[:4]
 
 
 def _metric(text: str, pattern: str) -> int:

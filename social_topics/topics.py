@@ -195,6 +195,7 @@ def _sample(p: Post) -> dict:
         "created_at": p.created_at,
         "text": text[:280] + ("…" if len(text) > 280 else ""),
         "engagement": p.engagement,
+        "images": p.images[:4],
     }
 
 

@@ -13,6 +13,18 @@ POSTS = [
 ]
 
 
+class GalleryTests(unittest.TestCase):
+    def test_newest_first_and_undated_last(self):
+        from social_topics.report import gallery
+        posts = [
+            Post("facebook", "a", "u", "no date", images=["https://img/a.jpg"]),
+            Post("twitter", "b", "u", "older", created_at="2026-10-01T00:00:00Z", images=["https://img/b.jpg"]),
+            Post("twitter", "c", "u", "newer", created_at="2026-10-02T00:00:00Z", images=["https://img/c.jpg"]),
+            Post("twitter", "d", "u", "text only", created_at="2026-10-03T00:00:00Z"),
+        ]
+        self.assertEqual([g["text"] for g in gallery(posts)], ["newer", "older", "no date"])
+
+
 class CliReportTests(unittest.TestCase):
     def test_scan_from_file_writes_report_and_index(self):
         with tempfile.TemporaryDirectory() as d:
@@ -47,6 +59,13 @@ class CliReportTests(unittest.TestCase):
             topics = {t["label"]: t["new"] for t in json.loads((out / "reports" / "b.json").read_text())["topics"]}
             self.assertTrue(topics["solar eclipse"])
             self.assertFalse(topics["interest rates"])
+
+    def test_request_file_overrides_config(self):
+        from social_topics.config import load_config
+        cfg = load_config(query=None, overrides={"twitter": {"accounts": ["AJEnglish"]}, "lookback_hours": 168})
+        self.assertEqual(cfg.twitter["accounts"], ["AJEnglish"])
+        self.assertIn("scrolls", cfg.twitter)  # other keys from config.json kept
+        self.assertEqual(cfg.lookback_hours, 168)
 
     def test_fails_when_no_platform_returns_data(self):
         with tempfile.TemporaryDirectory() as d:

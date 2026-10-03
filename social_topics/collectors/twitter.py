@@ -87,6 +87,7 @@ def parse_search_page(page) -> list[Post]:
             shares=_metric(stats, "repost") + _metric(stats, "quote"),
             likes=_metric(stats, "like"),
             views=_metric(stats, "view"),
+            images=[i.attrib["src"] for i in art.css('div[data-testid="tweetPhoto"] img') if i.attrib.get("src")],
         ))
     return posts
 
@@ -116,6 +117,7 @@ def parse_syndication(html: str) -> list[Post]:
             likes=t.get("favorite_count", 0) or 0,
             comments=t.get("reply_count", 0) or 0,
             shares=(t.get("retweet_count", 0) or 0) + (t.get("quote_count", 0) or 0),
+            images=list(dict.fromkeys(scrape.walk(t, "media_url_https"))),
         ))
     return posts
 

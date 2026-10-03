@@ -108,12 +108,15 @@ SYNDICATION = '<html><script id="__NEXT_DATA__" type="application/json">' + json
         "id_str": "111", "full_text": "Breaking: storm makes landfall #storm",
         "created_at": NOW.strftime("%a %b %d %H:%M:%S +0000 %Y"),
         "favorite_count": 40, "retweet_count": 5, "quote_count": 1, "reply_count": 3,
-        "user": {"screen_name": "BBCBreaking"}}}}]}}}}) + "</script></html>"
+        "user": {"screen_name": "BBCBreaking"},
+        "mediaDetails": [{"media_url_https": "https://pbs.twimg.com/media/A.jpg"}],
+        "entities": {"media": [{"media_url_https": "https://pbs.twimg.com/media/A.jpg"}]}}}}]}}}}) + "</script></html>"
 
 X_SEARCH = """<html><body>
 <article data-testid="tweet">
   <a href="/alice/status/222"><time datetime="2026-10-03T09:00:00.000Z">1h</time></a>
   <div data-testid="tweetText"><span>Storm </span><a>#update</a></div>
+  <div data-testid="tweetPhoto"><img src="https://pbs.twimg.com/media/B.jpg"></div>
   <div role="group" aria-label="5 replies, 20 reposts, 1,204 likes, 3 bookmarks, 50K views"></div>
 </article>
 <article data-testid="tweet"><div>promoted, no link</div></article>
@@ -127,6 +130,7 @@ class TwitterTests(unittest.TestCase):
         self.assertIn("screen-name/BBCBreaking", get.call_args.args[0])
         p = posts[0]
         self.assertEqual((p.url, p.likes, p.shares, p.comments), ("https://x.com/BBCBreaking/status/111", 40, 6, 3))
+        self.assertEqual(p.images, ["https://pbs.twimg.com/media/A.jpg"])  # de-duplicated
 
     def test_search_page_parsing(self):
         posts = twitter.parse_search_page(Selector(X_SEARCH))
@@ -135,6 +139,7 @@ class TwitterTests(unittest.TestCase):
         self.assertEqual((p.author, p.id, p.created_at), ("@alice", "222", "2026-10-03T09:00:00Z"))
         self.assertEqual((p.comments, p.shares, p.likes, p.views), (5, 20, 1204, 50000))
         self.assertIn("#update", p.text)
+        self.assertEqual(p.images, ["https://pbs.twimg.com/media/B.jpg"])
 
     def test_search_uses_login_cookie(self):
         with mock.patch.object(scrape, "browse", return_value=Selector(X_SEARCH)) as browse:
@@ -175,7 +180,8 @@ class InstagramTests(unittest.TestCase):
 
 FB_PAGE = """<html><body>
 <div role="article">
-  <h2><a href="/bbcnews">BBC News</a></h2>
+  <h2><a href="/bbcnews"><img src="https://scontent.xx.fbcdn.net/avatar.jpg">BBC News</a></h2>
+  <img src="https://scontent.xx.fbcdn.net/photo.jpg"><img src="https://static.xx.fbcdn.net/emoji.png">
   <a href="https://www.facebook.com/bbcnews/posts/pfbid0abc?__cft__[0]=zz">2h</a>
   <div data-ad-preview="message">Floods hit the valley</div>
   <span>All reactions: 1.5K</span><span>230 comments</span><span>45 shares</span>
@@ -192,6 +198,8 @@ class FacebookTests(unittest.TestCase):
         p = posts[0]
         self.assertEqual(p.url, "https://www.facebook.com/bbcnews/posts/pfbid0abc")
         self.assertEqual((p.author, p.likes, p.comments, p.shares), ("BBC News", 1500, 230, 45))
+        self.assertIn("https://scontent.xx.fbcdn.net/photo.jpg", p.images)
+        self.assertNotIn("https://scontent.xx.fbcdn.net/avatar.jpg", p.images)
 
     def test_cookies_enable_search(self):
         with mock.patch.object(scrape, "browse", return_value=Selector(FB_PAGE)) as browse:

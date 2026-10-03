@@ -74,6 +74,7 @@ def parse_profile(data: dict) -> list[Post]:
             likes=(n.get("edge_liked_by") or n.get("edge_media_preview_like") or {}).get("count", 0),
             comments=n.get("edge_media_to_comment", {}).get("count", 0),
             views=n.get("video_view_count", 0) or 0,
+            images=[u for u in [n.get("display_url") or n.get("thumbnail_src")] if u],
         ))
     return posts
 
@@ -94,5 +95,6 @@ def parse_tag(data: dict) -> list[Post]:
             likes=m.get("like_count", 0) or 0,
             comments=m.get("comment_count", 0) or 0,
             views=m.get("play_count", 0) or m.get("view_count", 0) or 0,
+            images=[c["url"] for c in (m.get("image_versions2") or {}).get("candidates", [])[:1] if c.get("url")],
         ))
     return posts

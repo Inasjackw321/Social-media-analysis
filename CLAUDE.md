@@ -18,6 +18,10 @@ Don't scrape from your own session. Cloud sessions usually can't reach the socia
    - the link `https://inasjackw321.github.io/Social-media-analysis/#report=run-<run_id>`
 4. If the run fails, read the job logs (`get_job_logs`) and explain what happened. Exit code 1 from the Scan step means no platform returned any data.
 
+### Scanning from a branch other than `main`
+
+The "Run workflow" route (`scan.yml`) only works on `main`. On any branch, scan by editing `scan-request.json` and pushing it instead. The file holds `query`, `platforms`, `lookback_hours`, and an optional `config` that overrides parts of `config.json` (e.g. extra accounts). The push runs `scan-request.yml`, which commits `site/data/reports/run-<run_id>.json` back to the same branch. Fetch the branch to read the report. Pages only redeploys when the push is to `main`.
+
 ## Development
 
 - `python -m unittest` runs the tests. They must pass offline, so mock `social_topics.scrape.get` / `get_json` / `browse` in tests.

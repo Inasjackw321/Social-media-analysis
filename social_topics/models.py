@@ -21,6 +21,7 @@ class Post:
     shares: int = 0
     views: int = 0
     hashtags: list[str] = field(default_factory=list)
+    images: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.hashtags:

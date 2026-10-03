@@ -25,10 +25,18 @@ def main(argv: list[str] | None = None) -> int:
     scan.add_argument("--config", default=None, help="Path to config.json")
     scan.add_argument("--out", default="site/data", help="Site data directory")
     scan.add_argument("--report-id", default="", help="Report file name (default: timestamp)")
+    scan.add_argument("--request", default="", help="JSON file with query/platforms/lookback_hours/config overrides")
     scan.add_argument("--from-file", default="", help="Analyse posts from a JSON file instead of calling APIs")
     args = ap.parse_args(argv)
 
-    cfg = load_config(args.config, args.query, args.platforms, args.lookback_hours)
+    req = json.loads(Path(args.request).read_text()) if args.request else {}
+    cfg = load_config(
+        args.config,
+        args.query or req.get("query"),
+        args.platforms or req.get("platforms"),
+        args.lookback_hours or req.get("lookback_hours"),
+        overrides=req.get("config"),
+    )
     if args.from_file:
         raw = json.loads(Path(args.from_file).read_text())
         posts = [Post(**{k: v for k, v in p.items() if k != "engagement"}) for p in raw]
