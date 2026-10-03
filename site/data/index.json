@@ -1,6 +1,19 @@
 {
  "reports": [
   {
+   "id": "run-37119424503",
+   "generated_at": "2026-10-03T11:29:01Z",
+   "query": [
+    "Sanaa",
+    "Sana'a",
+    "Sana’a",
+    "صنعاء"
+   ],
+   "posts": 2,
+   "topics": 0,
+   "top_topics": []
+  },
+  {
    "id": "run-37118863848",
    "generated_at": "2026-10-03T11:19:54Z",
    "query": [

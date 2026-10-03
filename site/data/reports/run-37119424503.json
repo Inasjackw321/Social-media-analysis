@@ -1,0 +1,53 @@
+{
+ "id": "run-37119424503",
+ "generated_at": "2026-10-03T11:29:01Z",
+ "query": [
+  "Sanaa",
+  "Sana'a",
+  "Sana’a",
+  "صنعاء"
+ ],
+ "lookback_hours": 336,
+ "sources": {
+  "twitter": {
+   "status": "error",
+   "message": "ScrapeError: @AJEnglish: HTTP 403 from https://x.com/AJEnglish; @AJArabic: HTTP 403 from https://x.com/AJArabic; @AlArabiya: HTTP 403 from https://x.com/AlArabiya; @MiddleEastEye: HTTP 403 from https://x.com/MiddleEastEye; @Reuters: HTTP 403 from https://x.com/Reuters; @AFP: HTTP 403 from https://x.com/AFP; @AP: HTTP 403 from https://x.com/AP; @XHNews: HTTP 403 from https://x.com/XHNews",
+   "count": 0
+  },
+  "facebook": {
+   "status": "ok",
+   "message": "",
+   "count": 2
+  }
+ },
+ "totals": {
+  "posts": 2,
+  "by_platform": {
+   "facebook": 2
+  },
+  "engagement": 85
+ },
+ "topics": [],
+ "hashtags": [],
+ "gallery": [],
+ "posts": [
+  {
+   "platform": "facebook",
+   "url": "https://www.facebook.com/AlArabiya/videos/3207822262741802/",
+   "author": "قناة العربية  Al Arabiya",
+   "created_at": "2026-10-03T11:04:17Z",
+   "text": "مباشر من قناة العربية | الطيران الحربي اليمني يستهدف النهدين وجبل عطان في صنعاء وتجمعات الحوثيين عند المدخل الشرقي لمدينة تعز",
+   "images": [],
+   "engagement": 49
+  },
+  {
+   "platform": "facebook",
+   "url": "https://www.facebook.com/reel/2184961972363295/",
+   "author": "قناة العربية  Al Arabiya",
+   "created_at": "2026-10-03T10:53:56Z",
+   "text": "قصة \"جهاد\" مع اللجوء في مخيم المركزي بـ جيبوتي.. غادر صنعاء طفلًا للهرب من اعتداءات الحوثي ويطمح إلى دراسة طب الأسنان",
+   "images": [],
+   "engagement": 36
+  }
+ ]
+}
