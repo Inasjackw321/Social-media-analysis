@@ -1,0 +1,100 @@
+name: Scan social media
+
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "Search terms, comma-separated (blank = latest posts from the accounts in config.json)"
+        required: false
+        default: ""
+      platforms:
+        description: "Platforms to scan, comma-separated"
+        required: false
+        default: "youtube,twitter,facebook,instagram"
+      lookback_hours:
+        description: "How far back to look, in hours"
+        required: false
+        default: "24"
+  # Uncomment to scan automatically every 6 hours:
+  # schedule:
+  #   - cron: "17 */6 * * *"
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/scan.yml"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: social-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Scrapling
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m unittest -q
+
+      - name: Install Scrapling's browser
+        if: github.event_name != 'push'
+        run: scrapling install
+
+      - name: Scan
+        if: github.event_name != 'push'
+        env:
+          QUERY: ${{ inputs.query }}
+          PLATFORMS: ${{ inputs.platforms || 'youtube,twitter,facebook,instagram' }}
+          LOOKBACK: ${{ inputs.lookback_hours || '24' }}
+          # All optional. Logins unlock keyword search on X, Instagram and Facebook.
+          X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
+          X_CT0: ${{ secrets.X_CT0 }}
+          INSTAGRAM_SESSIONID: ${{ secrets.INSTAGRAM_SESSIONID }}
+          FACEBOOK_COOKIES: ${{ secrets.FACEBOOK_COOKIES }}
+        run: |
+          python -m social_topics scan \
+            --query "$QUERY" --platforms "$PLATFORMS" --lookback-hours "$LOOKBACK" \
+            --report-id "run-${{ github.run_id }}"
+
+      - name: Save report to the repo
+        if: github.event_name != 'push'
+        env:
+          QUERY: ${{ inputs.query }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data
+          git commit -m "Scan results: ${QUERY:-latest posts} (run ${{ github.run_id }})"
+          for i in 1 2 3; do
+            git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME" && break
+            sleep 5
+          done
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    needs: scan
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
