@@ -1,0 +1,31 @@
+{
+ "id": "run-37118481479",
+ "generated_at": "2026-10-03T11:09:58Z",
+ "query": [
+  "Sanaa",
+  "Sana'a",
+  "Sana’a",
+  "صنعاء"
+ ],
+ "lookback_hours": 168,
+ "sources": {
+  "twitter": {
+   "status": "error",
+   "message": "ScrapeError: @AJEnglish: HTTP 429 from https://syndication.twitter.com/srv/timeline-profile/screen-name/AJEnglish; @AFP: HTTP 429 from https://syndication.twitter.com/srv/timeline-profile/screen-name/AFP; @Reuters: HTTP 429 from https://syndication.twitter.com/srv/timeline-profile/screen-name/Reuters; @AP: HTTP 429 from https://syndication.twitter.com/srv/timeline-profile/screen-name/AP; @BBCBreaking: HTTP 429 from https://syndication.twitter.com/srv/timeline-profile/screen-name/BBCBreaking; @XH",
+   "count": 0
+  },
+  "facebook": {
+   "status": "ok",
+   "message": "",
+   "count": 0
+  }
+ },
+ "totals": {
+  "posts": 0,
+  "by_platform": {},
+  "engagement": 0
+ },
+ "topics": [],
+ "hashtags": [],
+ "gallery": []
+}
