@@ -1,0 +1,33 @@
+{
+ "id": "run-37118863848",
+ "generated_at": "2026-10-03T11:19:54Z",
+ "query": [
+  "Sanaa",
+  "Sana'a",
+  "Sana’a",
+  "صنعاء"
+ ],
+ "lookback_hours": 168,
+ "sources": {
+  "twitter": {
+   "status": "error",
+   "message": "ScrapeError: @AJEnglish: HTTP 403 from https://x.com/AJEnglish; @AJArabic: HTTP 403 from https://x.com/AJArabic; @AlArabiya: HTTP 403 from https://x.com/AlArabiya; @MiddleEastEye: HTTP 403 from https://x.com/MiddleEastEye; @Reuters: HTTP 403 from https://x.com/Reuters; @AFP: HTTP 403 from https://x.com/AFP; @AP: HTTP 403 from https://x.com/AP; @XHNews: HTTP 403 from https://x.com/XHNews",
+   "count": 0
+  },
+  "facebook": {
+   "status": "ok",
+   "message": "",
+   "count": 1
+  }
+ },
+ "totals": {
+  "posts": 1,
+  "by_platform": {
+   "facebook": 1
+  },
+  "engagement": 424
+ },
+ "topics": [],
+ "hashtags": [],
+ "gallery": []
+}
