@@ -293,6 +293,13 @@ class FacebookTests(unittest.TestCase):
         self.assertTrue(p.created_at)  # dated, unlike HTML-only parsing
         self.assertEqual(p.images, ["https://scontent.xx.fbcdn.net/s.jpg"])
 
+    def test_video_thumbnails_count_as_images(self):
+        story = {"__typename": "Story", "post_id": "5", "comet_sections": {}, "creation_time": int(NOW.timestamp()),
+                 "message": {"text": "Live from Sanaa"}, "url": "https://www.facebook.com/AlArabiya/videos/5/",
+                 "attachments": [{"media": {"__typename": "Video",
+                                            "preferred_thumbnail": {"image": {"uri": "https://scontent.xx.fbcdn.net/v.jpg"}}}}]}
+        self.assertEqual(facebook.parse_stories([story])[0].images, ["https://scontent.xx.fbcdn.net/v.jpg"])
+
     def test_explains_when_nothing_matched(self):
         fake = FakeBrowser({"bbcnews": Selector(FB_PAGE)})
         with mock.patch.object(scrape, "browser", fake):

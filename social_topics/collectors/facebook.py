@@ -78,7 +78,8 @@ def parse_stories(docs: list) -> list[Post]:
             created = scrape.first(t for t in scrape.walk(node, "creation_time") if isinstance(t, int))
             actor = scrape.first(a["name"] for actors in scrape.walk(node, "actors") if isinstance(actors, list)
                                  for a in actors if isinstance(a, dict) and a.get("name"))
-            images = [i["uri"] for i in scrape.walk(node, "photo_image") if isinstance(i, dict) and i.get("uri")]
+            images = [i["uri"] for key in ("photo_image", "thumbnailImage", "preferred_thumbnail", "image")
+                      for i in scrape.walk(node, key) if isinstance(i, dict) and "fbcdn" in str(i.get("uri", ""))]
             key = node.get("post_id") or node.get("id") or url or text
             posts[key] = Post(
                 platform="facebook",
