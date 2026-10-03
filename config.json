@@ -1,0 +1,32 @@
+{
+  "default_query": [],
+  "platforms": ["youtube", "twitter", "facebook", "instagram"],
+  "lookback_hours": 24,
+  "max_topics": 15,
+  "min_posts_per_topic": 2,
+
+  "youtube": {
+    "max_results_per_term": 30,
+    "channels": [
+      "UC16niRr50-MSBwiO3YDb3RA",
+      "UCupvZG-5ko_eiXAupbDfxWw",
+      "UCNye-wNBqNL5ZzHSJj3l8Bg",
+      "UChqUTb7kYRX8-EiaN3XFrSQ",
+      "UCoMdktPbSTixAyNGwb-UYkQ",
+      "UCeY0bbntWzzVIaj2z3QigXg",
+      "UCBi2mrWuNuyYy4gbM6fU18Q",
+      "UCHpw8xwDNhU9gdohEcJu4aA"
+    ]
+  },
+  "twitter": {
+    "accounts": ["BBCBreaking", "Reuters", "AP", "CNN", "nytimes", "SkyNews"],
+    "scrolls": 5
+  },
+  "facebook": {
+    "pages": ["bbcnews", "cnn", "Reuters", "aljazeera"],
+    "scrolls": 5
+  },
+  "instagram": {
+    "accounts": ["bbcnews", "cnn", "nytimes", "reuters", "natgeo", "aljazeeraenglish"]
+  }
+}
